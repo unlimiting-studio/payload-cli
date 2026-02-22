@@ -174,6 +174,25 @@ function maybeParseContent(contentValue) {
   }
 }
 
+function typeRefToString(typeRef) {
+  if (!typeRef) return 'unknown'
+  if (typeRef.kind === 'NON_NULL') return `${typeRefToString(typeRef.ofType)}!`
+  if (typeRef.kind === 'LIST') return `[${typeRefToString(typeRef.ofType)}]`
+  return typeRef.name || typeRef.kind || 'unknown'
+}
+
+function printSchemaFields(fields, depth = 0, pathPrefix = '') {
+  const indent = '  '.repeat(depth)
+
+  for (const field of fields || []) {
+    const currentPath = pathPrefix ? `${pathPrefix}.${field.name}` : field.name
+    console.log(`${indent}- ${currentPath}: ${typeRefToString(field.type)}`)
+    if (field.children?.length) {
+      printSchemaFields(field.children, depth + 1, currentPath)
+    }
+  }
+}
+
 function withAuthOptions(command) {
   return command
     .option('-d, --domain <domain>', 'Payload 도메인')
@@ -373,7 +392,7 @@ withAuthOptions(
         console.log(`collection: ${collection}`)
         console.log(`source: ${schema.source}`)
         if (schema.typeName) console.log(`type: ${schema.typeName}`)
-        console.log(JSON.stringify(schema.fields, null, 2))
+        printSchemaFields(schema.fields)
       } catch (error) {
         printError(error)
         process.exitCode = 1
