@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { Command } from 'commander'
+import { createRequire } from 'node:module'
 import process from 'node:process'
 import readline from 'node:readline'
 import { createInterface } from 'node:readline/promises'
@@ -19,6 +20,9 @@ import {
   loginWithPassword,
   updateDocument,
 } from './lib/payload.js'
+
+const require = createRequire(import.meta.url)
+const packageJson = require('../package.json')
 
 function printError(error) {
   const status = error?.response?.status
@@ -205,7 +209,7 @@ const program = new Command()
 program
   .name('payload')
   .description('Payload CMS CLI')
-  .version('0.3.0')
+  .version(packageJson.version)
 
 const auth = new Command('auth').description('인증 관련 명령')
 
