@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 import { Command } from 'commander'
 import { createRequire } from 'node:module'
+import fs from 'node:fs/promises'
+import path from 'node:path'
 import process from 'node:process'
 import readline from 'node:readline'
 import { createInterface } from 'node:readline/promises'
@@ -14,12 +16,15 @@ import {
 } from './lib/config.js'
 import {
   createDocument,
+  getDocument,
   getCollectionSchema,
   listCollections,
   listDocuments,
   loginWithPassword,
+  uploadMedia,
   updateDocument,
 } from './lib/payload.js'
+import { markdownToPayloadDocument, payloadDocumentToMarkdown } from './lib/markdown.js'
 
 const require = createRequire(import.meta.url)
 const packageJson = require('../package.json')
@@ -292,8 +297,10 @@ withAuthOptions(
     .command('create')
     .description('컬렉션에 문서를 생성합니다.')
     .argument('<collection>', '컬렉션 slug')
-    .requiredOption('--title <title>', '문서 제목')
-    .requiredOption('--content <content>', '본문 (plain text 또는 JSON 문자열)')
+    .option('--title <title>', '문서 제목')
+    .option('--content <content>', '본문 (plain text 또는 JSON 문자열)')
+    .option('--md', '마크다운 입력 모드')
+    .option('--input <path>', '마크다운 파일 경로 (--md와 함께 사용)')
     .option('--status <status>', '상태 값', 'draft')
     .option('--slug <slug>', '슬러그')
     .option('--excerpt <excerpt>', '요약문')
@@ -307,14 +314,60 @@ withAuthOptions(
           password: options.password,
         })
 
-        const data = {
-          title: options.title,
-          content: maybeParseContent(options.content),
-          status: options.status,
+        const data = {}
+
+        if (options.md) {
+          if (!options.input) {
+            throw new Error('--md를 사용할 때는 --input <markdown-file>이 필요합니다.')
+          }
+
+          const markdownPath = path.resolve(options.input)
+          const markdownText = await fs.readFile(markdownPath, 'utf8')
+          let firstUploadedMediaId = null
+          const converted = await markdownToPayloadDocument({
+            markdownText,
+            markdownFilePath: markdownPath,
+            uploadImage: async ({ alt, src, resolvedPath }) => {
+              if (src.startsWith('http://') || src.startsWith('https://')) {
+                return null
+              }
+
+              const uploaded = await uploadMedia({
+                domain: authResult.domain,
+                token: authResult.token,
+                filePath: resolvedPath,
+                alt,
+                lang: options.lang,
+              })
+
+              const media = uploaded?.doc || uploaded
+              if (!firstUploadedMediaId && media?.id) {
+                firstUploadedMediaId = media.id
+              }
+              return {
+                id: media?.id,
+              }
+            },
+          })
+
+          data.title = options.title || converted.title
+          data.content = converted.content
+          data.excerpt = options.excerpt || converted.excerpt
+          if (!data.cover && firstUploadedMediaId) {
+            data.cover = firstUploadedMediaId
+          }
+        } else {
+          if (!options.title || !options.content) {
+            throw new Error('기본 모드에서는 --title, --content가 필요합니다. (또는 --md --input 사용)')
+          }
+
+          data.title = options.title
+          data.content = maybeParseContent(options.content)
         }
 
+        data.status = options.status
         if (options.slug) data.slug = options.slug
-        if (options.excerpt) data.excerpt = options.excerpt
+        if (options.excerpt && !options.md) data.excerpt = options.excerpt
         if (options.data) Object.assign(data, parseJsonObject(options.data, '--data'))
 
         const created = await createDocument({
@@ -329,6 +382,63 @@ withAuthOptions(
         console.log(`생성 성공: ${collection}`)
         console.log(`id: ${doc?.id}`)
         if (doc?.slug) console.log(`slug: ${doc.slug}`)
+      } catch (error) {
+        printError(error)
+        process.exitCode = 1
+      }
+    }),
+)
+
+withAuthOptions(
+  program
+    .command('export')
+    .description('문서를 파일로 내보냅니다.')
+    .argument('<collection>', '컬렉션 slug')
+    .argument('<id>', '문서 id')
+    .option('--md', '마크다운으로 내보내기')
+    .option('-o, --output <path>', '출력 파일 경로')
+    .option('--lang <locale>', 'Payload locale 파라미터')
+    .action(async (collection, id, options) => {
+      try {
+        const authResult = await resolveAuth({
+          domain: options.domain,
+          email: options.email,
+          password: options.password,
+        })
+
+        const doc = await getDocument({
+          domain: authResult.domain,
+          token: authResult.token,
+          collection,
+          id,
+          depth: 2,
+          lang: options.lang,
+        })
+
+        if (options.md) {
+          const markdown = payloadDocumentToMarkdown({
+            doc,
+            domain: authResult.domain,
+          })
+          const outputPath = path.resolve(options.output || `${collection}-${id}.md`)
+          await fs.writeFile(outputPath, markdown, 'utf8')
+          console.log(`export 성공: ${collection}/${id}`)
+          console.log(`format: markdown`)
+          console.log(`output: ${outputPath}`)
+          return
+        }
+
+        const outputPath = options.output ? path.resolve(options.output) : null
+        const jsonText = `${JSON.stringify(doc, null, 2)}\n`
+        if (outputPath) {
+          await fs.writeFile(outputPath, jsonText, 'utf8')
+          console.log(`export 성공: ${collection}/${id}`)
+          console.log(`format: json`)
+          console.log(`output: ${outputPath}`)
+          return
+        }
+
+        console.log(jsonText.trim())
       } catch (error) {
         printError(error)
         process.exitCode = 1
