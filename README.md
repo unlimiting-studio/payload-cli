@@ -7,6 +7,7 @@ Payload CMS REST/GraphQL API를 다루는 CLI입니다.
 - `payload auth status`
 - `payload collections list`
 - `payload create <collection>`
+- `payload export <collection> <id>`
 - `payload list <collection>`
 - `payload schema <collection>`
 - `payload publish <collection> <id>`
@@ -50,6 +51,35 @@ payload create foobars --title "제목" --content "본문"
 
 ```bash
 payload create foobars --lang ko --title "제목" --content "본문"
+```
+
+마크다운 파일로 생성(로컬 이미지 자동 업로드):
+
+```bash
+payload create posts --md --input ./post.md
+```
+
+필요 시 제목/슬러그 덮어쓰기:
+
+```bash
+payload create posts --md --input ./post.md --title "직접 지정 제목" --slug custom-slug
+```
+
+`post.md` 안의 `![alt](./image.png)` 형식 로컬 이미지는 `media`에 자동 업로드되고 본문 `upload` 노드로 치환됩니다.
+
+## 문서 내보내기
+
+JSON 출력:
+
+```bash
+payload export posts 1
+payload export posts 1 --output ./post-1.json
+```
+
+마크다운 출력:
+
+```bash
+payload export posts 1 --md --output ./post-1.md
 ```
 
 ## 목록 조회
