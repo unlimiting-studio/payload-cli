@@ -1,6 +1,6 @@
 {
   "name": "@unlimiting/payload-cli",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Payload CMS CLI for auth and collection operations",
   "type": "module",
   "bin": {
