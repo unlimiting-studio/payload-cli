@@ -4,7 +4,11 @@
   "description": "Payload CMS CLI for auth and collection operations",
   "type": "module",
   "bin": {
-    "payload": "./src/index.js"
+    "payload": "src/index.js"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
   },
   "scripts": {
     "lint": "node --check src/index.js && node --check src/lib/config.js && node --check src/lib/payload.js",
