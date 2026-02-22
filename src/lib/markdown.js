@@ -51,6 +51,44 @@ function parseBlocks(markdownText) {
     .filter(Boolean)
 }
 
+function stripQuotes(value) {
+  const trimmed = value.trim()
+  if (
+    (trimmed.startsWith('"') && trimmed.endsWith('"')) ||
+    (trimmed.startsWith("'") && trimmed.endsWith("'"))
+  ) {
+    return trimmed.slice(1, -1)
+  }
+  return trimmed
+}
+
+function parseFrontmatter(markdownText) {
+  const match = markdownText.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?/)
+  if (!match) {
+    return {
+      frontmatter: {},
+      body: markdownText,
+    }
+  }
+
+  const frontmatter = {}
+  const lines = match[1].split(/\r?\n/)
+  for (const line of lines) {
+    const trimmed = line.trim()
+    if (!trimmed || trimmed.startsWith('#')) continue
+    const separatorIndex = trimmed.indexOf(':')
+    if (separatorIndex <= 0) continue
+    const key = trimmed.slice(0, separatorIndex).trim()
+    const rawValue = trimmed.slice(separatorIndex + 1).trim()
+    frontmatter[key] = stripQuotes(rawValue)
+  }
+
+  return {
+    frontmatter,
+    body: markdownText.slice(match[0].length),
+  }
+}
+
 function extractHeading(text) {
   const match = text.match(/^#\s+(.+)$/m)
   return match ? match[1].trim() : null
@@ -77,7 +115,8 @@ export async function markdownToPayloadDocument({
   markdownFilePath,
   uploadImage,
 }) {
-  const blocks = parseBlocks(markdownText)
+  const { frontmatter, body } = parseFrontmatter(markdownText)
+  const blocks = parseBlocks(body)
   const children = []
   let title = null
   let excerpt = null
@@ -119,7 +158,11 @@ export async function markdownToPayloadDocument({
   }
 
   return {
-    title: title || extractHeading(markdownText) || path.basename(markdownFilePath, path.extname(markdownFilePath)),
+    frontmatter,
+    title:
+      title ||
+      extractHeading(body) ||
+      path.basename(markdownFilePath, path.extname(markdownFilePath)),
     excerpt: excerpt || '',
     content: {
       root: {
