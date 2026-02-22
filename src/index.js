@@ -49,7 +49,7 @@ function parseJsonObject(value, label) {
 async function promptForMissing({ domain, email, password }) {
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout })
   try {
-    const nextDomain = domain || (await rl.question('Payload 도메인 (예: https://blog.whiskeycat.team): '))
+    const nextDomain = domain || (await rl.question('Payload 도메인 (예: https://example.com): '))
     const nextEmail = email || (await rl.question('이메일: '))
     const nextPassword = password || (await rl.question('비밀번호: '))
 
