@@ -67,6 +67,26 @@ payload create posts --md --input ./post.md --title "직접 지정 제목" --slu
 
 `post.md` 안의 `![alt](./image.png)` 형식 로컬 이미지는 `media`에 자동 업로드되고 본문 `upload` 노드로 치환됩니다.
 
+`cover`가 필요한 컬렉션이라면 frontmatter에 `coverImage`를 지정하세요:
+
+```md
+---
+title: 마크다운 글 제목
+slug: markdown-post-slug
+excerpt: 요약문
+publishedAt: 2026-02-22T13:00:00.000Z
+_status: draft
+coverImage: ./cover.png
+coverAlt: 커버 이미지 설명
+---
+
+본문 내용
+
+![본문 이미지](./body-image.png)
+```
+
+참고: `--md` 모드에서는 본문 첫 이미지를 자동으로 `cover`로 지정하지 않습니다.
+
 ## 문서 내보내기
 
 JSON 출력:
