@@ -62,7 +62,7 @@ export async function updateDocument({ domain, token, collection, id, data, lang
 }
 
 async function introspectType({ domain, token, typeName }) {
-  const query = `query($name: String!) { __type(name: $name) { name fields { name type { kind name ofType { kind name ofType { kind name } } } } } }`
+  const query = `query($name: String!) { __type(name: $name) { name fields { name type { kind name ofType { kind name ofType { kind name ofType { kind name ofType { kind name } } } } } } } }`
   const response = await axios.post(
     buildPath(domain, '/api/graphql'),
     { query, variables: { name: typeName } },
@@ -77,6 +77,69 @@ async function introspectType({ domain, token, typeName }) {
   return response.data?.data?.__type || null
 }
 
+function getNamedType(typeRef) {
+  let current = typeRef
+  while (current?.ofType) current = current.ofType
+  return current || null
+}
+
+function shouldExpandNestedType({ rootTypeName, namedType, depth }) {
+  if (!namedType?.name) return false
+  if (depth >= 4) return false
+  if (namedType.kind !== 'OBJECT') return false
+  return namedType.name.startsWith(`${rootTypeName}_`)
+}
+
+async function expandFields({
+  domain,
+  token,
+  rootTypeName,
+  fields,
+  depth,
+  typeCache,
+  stack,
+}) {
+  const expanded = []
+
+  for (const field of fields || []) {
+    const namedType = getNamedType(field.type)
+    const next = {
+      ...field,
+      namedType,
+    }
+
+    if (shouldExpandNestedType({ rootTypeName, namedType, depth }) && !stack.has(namedType.name)) {
+      let nestedType = typeCache.get(namedType.name)
+      if (!nestedType) {
+        nestedType = await introspectType({
+          domain,
+          token,
+          typeName: namedType.name,
+        })
+        typeCache.set(namedType.name, nestedType)
+      }
+
+      if (nestedType?.fields?.length) {
+        const nextStack = new Set(stack)
+        nextStack.add(namedType.name)
+        next.children = await expandFields({
+          domain,
+          token,
+          rootTypeName,
+          fields: nestedType.fields,
+          depth: depth + 1,
+          typeCache,
+          stack: nextStack,
+        })
+      }
+    }
+
+    expanded.push(next)
+  }
+
+  return expanded
+}
+
 function toPascalCase(value) {
   return value
     .split(/[^a-zA-Z0-9]/g)
@@ -88,14 +151,24 @@ function toPascalCase(value) {
 export async function getCollectionSchema({ domain, token, collection }) {
   const singular = collection.endsWith('s') ? collection.slice(0, -1) : collection
   const candidates = [toPascalCase(singular), toPascalCase(collection)]
+  const typeCache = new Map()
 
   for (const typeName of candidates) {
     const type = await introspectType({ domain, token, typeName })
+    typeCache.set(typeName, type)
     if (type?.fields?.length) {
       return {
         source: 'graphql-introspection',
         typeName,
-        fields: type.fields,
+        fields: await expandFields({
+          domain,
+          token,
+          rootTypeName: typeName,
+          fields: type.fields,
+          depth: 0,
+          typeCache,
+          stack: new Set([typeName]),
+        }),
       }
     }
   }
@@ -116,6 +189,13 @@ export async function getCollectionSchema({ domain, token, collection }) {
       ? Object.keys(sample).map((key) => ({
           name: key,
           type: { kind: 'UNKNOWN', name: typeof sample[key] },
+          children:
+            sample[key] && typeof sample[key] === 'object' && !Array.isArray(sample[key])
+              ? Object.keys(sample[key]).map((nestedKey) => ({
+                  name: nestedKey,
+                  type: { kind: 'UNKNOWN', name: typeof sample[key][nestedKey] },
+                }))
+              : undefined,
         }))
       : [],
   }
