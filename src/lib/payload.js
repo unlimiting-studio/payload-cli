@@ -2,6 +2,25 @@ import axios from 'axios'
 import { openAsBlob } from 'node:fs'
 import path from 'node:path'
 
+const EXTENSION_MIME_MAP = {
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.webp': 'image/webp',
+  '.gif': 'image/gif',
+  '.svg': 'image/svg+xml',
+  '.avif': 'image/avif',
+  '.bmp': 'image/bmp',
+  '.tif': 'image/tiff',
+  '.tiff': 'image/tiff',
+  '.pdf': 'application/pdf',
+}
+
+function inferMimeType(filePath) {
+  const ext = path.extname(filePath).toLowerCase()
+  return EXTENSION_MIME_MAP[ext] || 'application/octet-stream'
+}
+
 function buildPath(domain, path, query = {}) {
   const sanitized = path.startsWith('/') ? path : `/${path}`
   const url = new URL(`${domain}${sanitized}`)
@@ -79,7 +98,8 @@ export async function getDocument({ domain, token, collection, id, depth = 2, la
 export async function uploadMedia({ domain, token, filePath, alt, lang }) {
   const form = new FormData()
   form.append('_payload', JSON.stringify({ alt }))
-  const fileBlob = await openAsBlob(filePath)
+  const mimeType = inferMimeType(filePath)
+  const fileBlob = await openAsBlob(filePath, { type: mimeType })
   form.append('file', fileBlob, path.basename(filePath))
 
   const response = await fetch(buildPath(domain, '/api/media', { locale: lang }), {
