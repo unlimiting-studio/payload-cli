@@ -121,23 +121,56 @@ export async function getCollectionSchema({ domain, token, collection }) {
   }
 }
 
-export async function listCollections({ domain, token }) {
-  const query = `query { __schema { queryType { fields { name type { kind name ofType { kind name ofType { kind name } } } } } } }`
-  const response = await axios.post(
-    buildPath(domain, '/api/graphql'),
-    { query },
-    {
-      headers: {
-        ...authHeaders(token),
-        'Content-Type': 'application/json',
-      },
-    },
-  )
+function parseCollectionsFromGraphQLSchema(data) {
+  const fields = data?.data?.__schema?.queryType?.fields || []
 
-  const fields = response.data?.data?.__schema?.queryType?.fields || []
-  const candidates = fields
+  return fields
     .map((field) => field.name)
     .filter((name) => /^[a-z0-9_]+$/i.test(name) && name !== 'version')
+}
 
-  return [...new Set(candidates)].sort()
+async function fetchCollectionsFromAccessEndpoint({ domain, token }) {
+  const response = await axios.get(buildPath(domain, '/api/access'), {
+    headers: {
+      ...authHeaders(token),
+    },
+  })
+
+  const collectionsObj = response.data?.collections
+  if (!collectionsObj || typeof collectionsObj !== 'object') {
+    return []
+  }
+
+  return Object.keys(collectionsObj)
+}
+
+export async function listCollections({ domain, token }) {
+  const discovered = new Set()
+
+  try {
+    const query = `query { __schema { queryType { fields { name type { kind name ofType { kind name ofType { kind name } } } } } } }`
+    const response = await axios.post(
+      buildPath(domain, '/api/graphql'),
+      { query },
+      {
+        headers: {
+          ...authHeaders(token),
+          'Content-Type': 'application/json',
+        },
+      },
+    )
+
+    parseCollectionsFromGraphQLSchema(response.data).forEach((name) => discovered.add(name))
+  } catch {
+    // GraphQL이 비활성화된 환경을 위해 REST fallback을 사용한다.
+  }
+
+  try {
+    const fromAccess = await fetchCollectionsFromAccessEndpoint({ domain, token })
+    fromAccess.forEach((name) => discovered.add(name))
+  } catch {
+    // access endpoint가 닫혀 있어도 GraphQL 결과가 있으면 그대로 진행한다.
+  }
+
+  return [...discovered].sort()
 }
