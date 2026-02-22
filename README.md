@@ -52,17 +52,6 @@ payload foobars:create --title "제목" --content "본문"
 payload foobars:create --lang ko --title "제목" --content "본문"
 ```
 
-파일을 업로드하고 문서에 자동 연결:
-
-```bash
-payload foobars:create \
-  --title "제목" \
-  --content "본문" \
-  --file ./cover.png \
-  --alt "커버 이미지" \
-  --media-field featuredImage
-```
-
 ## 컬렉션 목록 조회(페이징)
 
 ```bash
