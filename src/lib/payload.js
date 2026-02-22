@@ -1,6 +1,4 @@
 import axios from 'axios'
-import fs from 'node:fs'
-import FormData from 'form-data'
 
 function buildPath(domain, path, query = {}) {
   const sanitized = path.startsWith('/') ? path : `/${path}`
@@ -24,26 +22,6 @@ export async function loginWithPassword({ domain, email, password }) {
     { email, password },
     { headers: { 'Content-Type': 'application/json' } },
   )
-
-  return response.data
-}
-
-export async function uploadMedia({ domain, token, filePath, alt, lang }) {
-  if (!fs.existsSync(filePath)) {
-    throw new Error(`파일이 존재하지 않습니다: ${filePath}`)
-  }
-
-  const form = new FormData()
-  form.append('alt', alt)
-  form.append('file', fs.createReadStream(filePath))
-
-  const response = await axios.post(buildPath(domain, '/api/media', { locale: lang }), form, {
-    headers: {
-      ...form.getHeaders(),
-      ...authHeaders(token),
-    },
-    maxBodyLength: Infinity,
-  })
 
   return response.data
 }
