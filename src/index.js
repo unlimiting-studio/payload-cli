@@ -17,7 +17,6 @@ import {
   listDocuments,
   loginWithPassword,
   updateDocument,
-  uploadMedia,
 } from './lib/payload.js'
 
 function printError(error) {
@@ -151,24 +150,6 @@ async function runDynamicCollectionCommand(rawCommand, commandOptions) {
     if (commandOptions.slug) data.slug = commandOptions.slug
     if (commandOptions.excerpt) data.excerpt = commandOptions.excerpt
     if (commandOptions.data) Object.assign(data, parseJsonObject(commandOptions.data, '--data'))
-
-    if (commandOptions.file) {
-      if (!commandOptions.alt) {
-        throw new Error('--file 사용 시 --alt도 필요합니다.')
-      }
-
-      const uploaded = await uploadMedia({
-        domain: auth.domain,
-        token: auth.token,
-        filePath: commandOptions.file,
-        alt: commandOptions.alt,
-        lang: commandOptions.lang,
-      })
-
-      const mediaDoc = uploaded?.doc || uploaded
-      const mediaField = commandOptions.mediaField || 'featuredImage'
-      data[mediaField] = mediaDoc?.id
-    }
 
     const created = await createDocument({
       domain: auth.domain,
@@ -337,9 +318,6 @@ program
   .option('--slug <slug>', 'create: slug')
   .option('--excerpt <excerpt>', 'create: excerpt')
   .option('--data <json>', 'create: 추가 JSON 객체')
-  .option('--file <path>', 'create: 업로드 파일 경로 (media 업로드 후 연결)')
-  .option('--alt <text>', 'create + --file: alt 텍스트')
-  .option('--media-field <name>', 'create + --file: media 필드명 (기본 featuredImage)')
   .option('--page <number>', 'list: 페이지', (value) => Number(value))
   .option('--limit <number>', 'list: 페이지당 개수', (value) => Number(value))
   .option('--id <id>', 'publish/unpublish: 문서 id')
