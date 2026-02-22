@@ -1,6 +1,6 @@
 {
   "name": "@unlimiting/payload-cli",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "description": "Payload CMS CLI for auth and collection operations",
   "repository": {
     "type": "git",
@@ -15,8 +15,7 @@
     "payload": "src/index.js"
   },
   "publishConfig": {
-    "access": "public",
-    "provenance": true
+    "access": "public"
   },
   "scripts": {
     "lint": "node --check src/index.js && node --check src/lib/config.js && node --check src/lib/payload.js",
