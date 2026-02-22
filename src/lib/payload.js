@@ -1,4 +1,6 @@
 import axios from 'axios'
+import { openAsBlob } from 'node:fs'
+import path from 'node:path'
 
 function buildPath(domain, path, query = {}) {
   const sanitized = path.startsWith('/') ? path : `/${path}`
@@ -59,6 +61,46 @@ export async function updateDocument({ domain, token, collection, id, data, lang
   })
 
   return response.data
+}
+
+export async function getDocument({ domain, token, collection, id, depth = 2, lang }) {
+  const response = await axios.get(
+    buildPath(domain, `/api/${collection}/${id}`, { depth, locale: lang }),
+    {
+      headers: {
+        ...authHeaders(token),
+      },
+    },
+  )
+
+  return response.data
+}
+
+export async function uploadMedia({ domain, token, filePath, alt, lang }) {
+  const form = new FormData()
+  form.append('_payload', JSON.stringify({ alt }))
+  const fileBlob = await openAsBlob(filePath)
+  form.append('file', fileBlob, path.basename(filePath))
+
+  const response = await fetch(buildPath(domain, '/api/media', { locale: lang }), {
+    method: 'POST',
+    headers: {
+      ...authHeaders(token),
+    },
+    body: form,
+  })
+
+  const data = await response.json()
+  if (!response.ok) {
+    const error = new Error(data?.errors?.[0]?.message || data?.message || 'media upload failed')
+    error.response = {
+      status: response.status,
+      data,
+    }
+    throw error
+  }
+
+  return data
 }
 
 async function introspectType({ domain, token, typeName }) {
