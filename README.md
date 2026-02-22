@@ -1,12 +1,16 @@
-# payload-cli
+# payload
 
-Payload CMS REST API를 다루는 간단한 CLI입니다.
+Payload CMS REST/GraphQL API를 다루는 CLI입니다.
 
 지원 기능:
-- `auth:login`: 도메인/이메일/비밀번호 인증 및 로컬 저장
-- `auth:status`: 저장된 기본 인증 정보 확인
-- `media:upload`: 파일 업로드 (`/api/media`)
-- `post:create`: 포스트(또는 임의 컬렉션 문서) 생성
+- `payload auth login`
+- `payload auth status`
+- `payload collections list`
+- `payload <collection>:create`
+- `payload <collection>:list`
+- `payload <collection>:schema`
+- `payload <collection>:publish <id>`
+- `payload <collection>:unpublish <id>`
 
 ## 설치
 
@@ -20,66 +24,72 @@ npm link
 최초 1회 로그인:
 
 ```bash
-payload-cli auth:login --domain https://your-payload-domain.com --email you@example.com --password 'your-password'
+payload auth login --domain https://your-payload-domain.com --email you@example.com --password 'your-password'
 ```
 
 저장 경로:
-- macOS/Linux: `~/.config/payload-cli/credentials.json`
+- macOS/Linux: `~/.config/payload/credentials.json`
 
 이후 명령 실행 시 저장된 정보로 자동 로그인합니다.
 
-## 파일 업로드
+## 컬렉션 목록 조회
 
 ```bash
-payload-cli media:upload --file ./cover.png --alt "커버 이미지"
+payload collections list
 ```
 
-도메인/계정을 덮어쓰려면 옵션 추가:
+GraphQL introspection 기반 추정 목록입니다.
+
+## 컬렉션별 문서 생성
 
 ```bash
-payload-cli media:upload \
-  --domain https://your-payload-domain.com \
-  --email you@example.com \
-  --password 'your-password' \
-  --file ./cover.png \
-  --alt "커버 이미지"
+payload foobars:create --title "제목" --content "본문"
 ```
 
-## 포스트 작성
-
-기본 컬렉션은 `posts`입니다.
+로케일 지정:
 
 ```bash
-payload-cli post:create \
-  --title "첫 글" \
-  --content "안녕하세요" \
-  --status published \
-  --slug first-post
+payload foobars:create --lang ko --title "제목" --content "본문"
 ```
 
-업로드한 media id를 연결할 때:
+파일을 업로드하고 문서에 자동 연결:
 
 ```bash
-payload-cli post:create \
-  --title "이미지 포함 글" \
+payload foobars:create \
+  --title "제목" \
   --content "본문" \
-  --media-id 12 \
+  --file ./cover.png \
+  --alt "커버 이미지" \
   --media-field featuredImage
 ```
 
-컬렉션이 다르면 `--collection`으로 지정하세요.
+## 컬렉션 목록 조회(페이징)
 
 ```bash
-payload-cli post:create --collection announcements --title "공지" --content "내용"
+payload foobars:list --page 3 --limit 30
 ```
 
-추가 필드가 필요하면 `--data` JSON으로 덮어쓸 수 있습니다.
+## 컬렉션 스키마 조회
 
 ```bash
-payload-cli post:create \
-  --title "커스텀" \
-  --content "본문" \
-  --data '{"author":"team","tags":["notice"]}'
+payload foobars:schema
+```
+
+1차로 GraphQL introspection을 시도하고, 실패하면 샘플 문서 키 기반으로 fallback합니다.
+
+## 퍼블리시 / 언퍼블리시
+
+```bash
+payload foobars:publish 1
+payload foobars:unpublish 1
+```
+
+기본 동작은 `status` 필드를 각각 `published` / `draft`로 업데이트합니다.
+필드명/값이 다르면 옵션으로 조정할 수 있습니다.
+
+```bash
+payload foobars:publish 1 --status-field state --published-value live
+payload foobars:unpublish 1 --status-field state --draft-value hidden
 ```
 
 ## 보안 주의
