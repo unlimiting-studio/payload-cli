@@ -2,6 +2,14 @@
   "name": "@unlimiting/payload-cli",
   "version": "0.2.1",
   "description": "Payload CMS CLI for auth and collection operations",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/unlimiting-studio/payload-cli.git"
+  },
+  "homepage": "https://github.com/unlimiting-studio/payload-cli#readme",
+  "bugs": {
+    "url": "https://github.com/unlimiting-studio/payload-cli/issues"
+  },
   "type": "module",
   "bin": {
     "payload": "src/index.js"
