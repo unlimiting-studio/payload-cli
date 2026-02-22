@@ -2,7 +2,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 
-const CONFIG_DIR = path.join(os.homedir(), '.config', 'payload-cli')
+const CONFIG_DIR = path.join(os.homedir(), '.config', 'payload')
 const CONFIG_FILE = path.join(CONFIG_DIR, 'credentials.json')
 
 function ensureConfigDir() {
@@ -30,10 +30,12 @@ export function saveConfig(config) {
 
 export function normalizeDomain(value) {
   if (!value) return ''
+
   let domain = value.trim()
   if (!domain.startsWith('http://') && !domain.startsWith('https://')) {
     domain = `https://${domain}`
   }
+
   return domain.replace(/\/+$/, '')
 }
 
@@ -57,9 +59,7 @@ export function upsertProfile({ domain, email, password, setDefault = true }) {
   const normalized = normalizeDomain(domain)
 
   config.profiles[normalized] = { email, password }
-  if (setDefault) {
-    config.defaultDomain = normalized
-  }
+  if (setDefault) config.defaultDomain = normalized
 
   saveConfig(config)
 
