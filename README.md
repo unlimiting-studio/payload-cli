@@ -19,6 +19,14 @@ npm install
 npm link
 ```
 
+## 릴리스 (Trusted Publishing)
+
+GitHub Actions OIDC 기반 Trusted Publishing을 사용합니다.
+
+- 워크플로: `.github/workflows/npm-publish.yml`
+- 트리거: `v*` 태그 push 또는 수동 실행
+- 퍼블리시 명령: `npm publish --provenance --access public`
+
 ## 인증 정보 저장
 
 최초 1회 로그인:
