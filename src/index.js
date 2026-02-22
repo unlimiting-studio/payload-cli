@@ -323,7 +323,6 @@ withAuthOptions(
 
           const markdownPath = path.resolve(options.input)
           const markdownText = await fs.readFile(markdownPath, 'utf8')
-          let firstUploadedMediaId = null
           const converted = await markdownToPayloadDocument({
             markdownText,
             markdownFilePath: markdownPath,
@@ -341,20 +340,52 @@ withAuthOptions(
               })
 
               const media = uploaded?.doc || uploaded
-              if (!firstUploadedMediaId && media?.id) {
-                firstUploadedMediaId = media.id
-              }
               return {
                 id: media?.id,
               }
             },
           })
 
-          data.title = options.title || converted.title
+          const frontmatter = converted.frontmatter || {}
+          data.title = options.title || frontmatter.title || converted.title
           data.content = converted.content
-          data.excerpt = options.excerpt || converted.excerpt
-          if (!data.cover && firstUploadedMediaId) {
-            data.cover = firstUploadedMediaId
+          data.excerpt = options.excerpt || frontmatter.excerpt || converted.excerpt
+
+          if (frontmatter.slug && !options.slug) {
+            data.slug = frontmatter.slug
+          }
+          if (frontmatter.publishedAt) {
+            data.publishedAt = frontmatter.publishedAt
+          }
+          if (frontmatter.status) {
+            data.status = frontmatter.status
+          }
+          if (frontmatter._status) {
+            data._status = frontmatter._status
+          }
+
+          if (frontmatter.coverImage) {
+            const coverAlt = frontmatter.coverAlt || frontmatter.coverImageAlt || 'cover image'
+            const coverPath = frontmatter.coverImage
+            if (coverPath.startsWith('http://') || coverPath.startsWith('https://')) {
+              throw new Error('frontmatter coverImage는 로컬 파일 경로만 지원합니다.')
+            }
+
+            const resolvedCoverPath = path.isAbsolute(coverPath)
+              ? coverPath
+              : path.resolve(path.dirname(markdownPath), coverPath)
+
+            const uploadedCover = await uploadMedia({
+              domain: authResult.domain,
+              token: authResult.token,
+              filePath: resolvedCoverPath,
+              alt: coverAlt,
+              lang: options.lang,
+            })
+            const coverMedia = uploadedCover?.doc || uploadedCover
+            if (coverMedia?.id) {
+              data.cover = coverMedia.id
+            }
           }
         } else {
           if (!options.title || !options.content) {
@@ -369,6 +400,12 @@ withAuthOptions(
         if (options.slug) data.slug = options.slug
         if (options.excerpt && !options.md) data.excerpt = options.excerpt
         if (options.data) Object.assign(data, parseJsonObject(options.data, '--data'))
+
+        if (options.md && !data.cover) {
+          console.error(
+            '안내: --md 모드에서는 cover를 자동으로 추론하지 않습니다. 필요하면 frontmatter에 coverImage를 지정하세요.',
+          )
+        }
 
         const created = await createDocument({
           domain: authResult.domain,
