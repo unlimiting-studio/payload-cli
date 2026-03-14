@@ -23,10 +23,10 @@ function createParagraphNode(text) {
   }
 }
 
-function createHeadingNode(text) {
+function createHeadingNode(text, tag = 'h1') {
   return {
     type: 'heading',
-    tag: 'h1',
+    tag,
     direction: 'ltr',
     format: '',
     indent: 0,
@@ -44,11 +44,153 @@ function createUploadNode(mediaId) {
   }
 }
 
+function createListItemNode(text, value = 1) {
+  return {
+    type: 'listitem',
+    value,
+    direction: 'ltr',
+    format: '',
+    indent: 0,
+    version: 1,
+    children: [createParagraphNode(text)],
+  }
+}
+
+function createListNode(items, listType = 'bullet') {
+  return {
+    type: 'list',
+    listType,
+    tag: listType === 'number' ? 'ol' : 'ul',
+    start: 1,
+    direction: 'ltr',
+    format: '',
+    indent: 0,
+    version: 1,
+    children: items.map((item, index) => createListItemNode(item, index + 1)),
+  }
+}
+
+function isHeadingLine(line) {
+  return /^#{1,6}\s+.+$/.test(line)
+}
+
+function parseHeadingLine(line) {
+  const match = line.match(/^(#{1,6})\s+(.+)$/)
+  if (!match) return null
+
+  return {
+    level: Math.min(match[1].length, 6),
+    text: match[2].trim(),
+  }
+}
+
+function isImageLine(line) {
+  return /^!\[([^\]]*)\]\(([^)]+)\)$/.test(line)
+}
+
+function parseImageLine(line) {
+  const match = line.match(/^!\[([^\]]*)\]\(([^)]+)\)$/)
+  if (!match) return null
+
+  return {
+    alt: match[1].trim() || 'image',
+    src: match[2].trim(),
+  }
+}
+
+function parseListItemLine(line) {
+  const unordered = line.match(/^[-*+]\s+(.+)$/)
+  if (unordered) {
+    return {
+      listType: 'bullet',
+      text: unordered[1].trim(),
+    }
+  }
+
+  const ordered = line.match(/^\d+\.\s+(.+)$/)
+  if (ordered) {
+    return {
+      listType: 'number',
+      text: ordered[1].trim(),
+    }
+  }
+
+  return null
+}
+
 function parseBlocks(markdownText) {
-  return markdownText
-    .split(/\r?\n\r?\n/g)
-    .map((chunk) => chunk.trim())
-    .filter(Boolean)
+  const lines = markdownText.split(/\r?\n/)
+  const blocks = []
+
+  for (let index = 0; index < lines.length; ) {
+    const currentLine = lines[index].trim()
+    if (!currentLine) {
+      index += 1
+      continue
+    }
+
+    const heading = parseHeadingLine(currentLine)
+    if (heading) {
+      blocks.push({ type: 'heading', ...heading })
+      index += 1
+      continue
+    }
+
+    const image = parseImageLine(currentLine)
+    if (image) {
+      blocks.push({ type: 'image', ...image })
+      index += 1
+      continue
+    }
+
+    const firstListItem = parseListItemLine(currentLine)
+    if (firstListItem) {
+      const items = [firstListItem.text]
+      const listType = firstListItem.listType
+      index += 1
+
+      while (index < lines.length) {
+        const nextLine = lines[index].trim()
+        if (!nextLine) {
+          index += 1
+          break
+        }
+
+        const nextListItem = parseListItemLine(nextLine)
+        if (!nextListItem || nextListItem.listType !== listType) break
+        items.push(nextListItem.text)
+        index += 1
+      }
+
+      blocks.push({ type: 'list', listType, items })
+      continue
+    }
+
+    const paragraphLines = [currentLine]
+    index += 1
+
+    while (index < lines.length) {
+      const nextLine = lines[index].trim()
+      if (
+        !nextLine ||
+        isHeadingLine(nextLine) ||
+        isImageLine(nextLine) ||
+        parseListItemLine(nextLine)
+      ) {
+        break
+      }
+
+      paragraphLines.push(nextLine)
+      index += 1
+    }
+
+    blocks.push({
+      type: 'paragraph',
+      text: paragraphLines.join(' ').trim(),
+    })
+  }
+
+  return blocks
 }
 
 function stripQuotes(value) {
@@ -103,6 +245,15 @@ function extractPlainTextFromNode(node) {
   return ''
 }
 
+function extractListItemText(node) {
+  if (!node || typeof node !== 'object' || !Array.isArray(node.children)) return ''
+
+  return node.children
+    .map((child) => extractPlainTextFromNode(child).trim())
+    .filter(Boolean)
+    .join(' ')
+}
+
 function toAbsoluteUrl(domain, maybePath) {
   if (!maybePath || typeof maybePath !== 'string') return ''
   if (maybePath.startsWith('http://') || maybePath.startsWith('https://')) return maybePath
@@ -122,21 +273,19 @@ export async function markdownToPayloadDocument({
   let excerpt = null
 
   for (const block of blocks) {
-    const heading = block.match(/^#\s+(.+)$/)
-    if (heading) {
-      const headingText = heading[1].trim()
+    if (block.type === 'heading') {
+      const headingText = block.text
       if (!title) {
         title = headingText
       } else {
-        children.push(createHeadingNode(headingText))
+        children.push(createHeadingNode(headingText, `h${block.level}`))
       }
       continue
     }
 
-    const image = block.match(/^!\[([^\]]*)\]\(([^)]+)\)$/)
-    if (image) {
-      const alt = image[1].trim() || 'image'
-      const src = image[2].trim()
+    if (block.type === 'image') {
+      const alt = block.alt
+      const src = block.src
       const resolvedPath =
         src.startsWith('http://') || src.startsWith('https://') || path.isAbsolute(src)
           ? src
@@ -151,10 +300,18 @@ export async function markdownToPayloadDocument({
       continue
     }
 
-    const paragraph = block.replace(/\r?\n/g, ' ').trim()
-    if (!paragraph) continue
-    if (!excerpt) excerpt = paragraph
-    children.push(createParagraphNode(paragraph))
+    if (block.type === 'list') {
+      if (!excerpt && block.items.length > 0) excerpt = block.items[0]
+      children.push(createListNode(block.items, block.listType))
+      continue
+    }
+
+    if (block.type === 'paragraph') {
+      const paragraph = block.text.trim()
+      if (!paragraph) continue
+      if (!excerpt) excerpt = paragraph
+      children.push(createParagraphNode(paragraph))
+    }
   }
 
   return {
@@ -192,7 +349,22 @@ export function payloadDocumentToMarkdown({ doc, domain }) {
 
     if (node?.type === 'heading') {
       const text = extractPlainTextFromNode(node).trim()
-      if (text) lines.push(`## ${text}`, '')
+      const level = Number(String(node.tag || '').replace(/^h/i, ''))
+      const prefix = '#'.repeat(level >= 1 && level <= 6 ? level : 2)
+      if (text) lines.push(`${prefix} ${text}`, '')
+      continue
+    }
+
+    if (node?.type === 'list') {
+      const items = Array.isArray(node.children) ? node.children : []
+      const isOrdered = node.listType === 'number' || node.tag === 'ol'
+      items.forEach((item, index) => {
+        const text = extractListItemText(item)
+        if (!text) return
+        const marker = isOrdered ? `${index + 1}.` : '-'
+        lines.push(`${marker} ${text}`)
+      })
+      if (items.length) lines.push('')
       continue
     }
 

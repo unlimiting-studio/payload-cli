@@ -18,8 +18,8 @@
     "access": "public"
   },
   "scripts": {
-    "lint": "node --check src/index.js && node --check src/lib/config.js && node --check src/lib/payload.js",
-    "test": "npm run lint"
+    "lint": "node --check src/index.js && node --check src/lib/config.js && node --check src/lib/payload.js && node --check src/lib/markdown.js",
+    "test": "npm run lint && node --test test/**/*.test.js"
   },
   "engines": {
     "node": ">=20"
